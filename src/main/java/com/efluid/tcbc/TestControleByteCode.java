@@ -1,6 +1,5 @@
 package com.efluid.tcbc;
 
-import static java.lang.System.lineSeparator;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Method;
@@ -11,6 +10,10 @@ import org.cojen.classfile.constant.*;
 import org.slf4j.*;
 
 import com.efluid.tcbc.utils.MethodLookup;
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.description.method.MethodDescription;
+import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.dynamic.DynamicType;
 
 /**
  * Classe de test JUNIT permettant de contrôler le byteCode des classes JAVA du classpath de la JVM en cours. <br>
@@ -37,17 +40,12 @@ import com.efluid.tcbc.utils.MethodLookup;
  */
 public class TestControleByteCode extends ScanneClasspath {
 
+  private static final Logger LOG = LoggerFactory.getLogger(TestControleByteCode.class);
   private static final String FICHIER_CONFIGURATION = "controleByteCode.yaml";
-
   private static final String ENV_NOMBRE_JAR_MINIMUM = "nbJarMinimum";
   private static int nbJarMinimum = System.getProperty(ENV_NOMBRE_JAR_MINIMUM) != null ? Integer.parseInt(System.getProperty(ENV_NOMBRE_JAR_MINIMUM)) : 0;
-
-  /**
-   * Utilisés pour effectuer le bilan global du contrôle du byteCode
-   */
+  /* Utilisés pour effectuer le bilan global du contrôle du byteCode */
   private Set<String> classesReferenceesNonTrouveesOuChargees = new HashSet<String>();
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestControleByteCode.class);
 
   public TestControleByteCode() {
     super();
@@ -68,10 +66,15 @@ public class TestControleByteCode extends ScanneClasspath {
    */
   private void chargerByteCodeClasse() {
     try {
+      Class<?> classe = chargerClasseDansClassLoader(classeEnCours.getNom());
+
+      DynamicType.Unloaded<?> classeByteCode = new ByteBuddy().redefine(classe).make();
+      TypeDescription typeDescription = classeByteCode.getTypeDescription();
+
       ClassFile classfile = ClassFile.readFrom(fluxEnCours);
-      // On teste le chargement de la classe avant de contrôler le byteCode
-      Class<?> classe = chargerClasseDansClassLoader(classfile.getType());
+
       if (classe != null) {
+        lireByteCodeClasse(typeDescription);
         lireByteCodeClasse(classfile.getConstantPool());
       }
     } catch (Throwable ex) {
@@ -85,6 +88,18 @@ public class TestControleByteCode extends ScanneClasspath {
    */
   protected void lireByteCodeClasse(ConstantPool constantPool) {
     scannerMethodes(constantPool);
+  }
+
+  protected void lireByteCodeClasse(TypeDescription typeDescription) {
+    scannerMethodes(typeDescription);
+  }
+
+  private void scannerMethodes(TypeDescription typeDescription) {
+    for (MethodDescription methodDescription : typeDescription.getDeclaredMethods()) {
+      if (!methodDescription.isConstructor()) {
+        System.out.println("methodDescription : " + methodDescription);
+      }
+    }
   }
 
   /**
@@ -110,27 +125,26 @@ public class TestControleByteCode extends ScanneClasspath {
    * Charge la classe référencée et appelle la méthode
    */
   private void analyserMethode(ConstantMethodInfo constantMethod, String nomMethode, MethodDesc methodDesc) {
-    Class<?> aClass = chargeClasseDansClassLoader(constantMethod.getParentClass().getType(), nomMethode);
+    Class<?> aClass = chargerClasse(constantMethod.getParentClass().getType().getRootName(), nomMethode);
     if (aClass != null) {
       appelMethod(aClass, nomMethode, getParametres(methodDesc), methodDesc.getReturnType());
     }
   }
 
-  public Class<?> chargerClasseDansClassLoader(TypeDesc typeDesc) {
-    return chargeClasseDansClassLoader(typeDesc, "");
+  public Class<?> chargerClasseDansClassLoader(String nomClasse) {
+    return chargerClasse(nomClasse, "");
   }
 
   /**
    * Capture et traite l'ensemble des exceptions lors du chargement de la classe dans le classLoader
    */
-  private Class<?> chargeClasseDansClassLoader(TypeDesc typeDesc, String nomMethode) {
-    String libelle = "Erreur de chargement de la classe dans le classLoader : " + typeDesc.getFullName();
+  private Class<?> chargerClasse(String nomClasse, String nomMethode) {
+    String libelle = "Erreur de chargement de la classe dans le classLoader : " + nomClasse;
     try {
-      return typeDesc.toClass();
-    } catch (java.lang.NoClassDefFoundError errClassDefFound) {
+      return Class.forName(nomClasse);
+    } catch (NoClassDefFoundError errClassDefFound) {
       libelle += " - " + errClassDefFound;
-    } catch (java.lang.ExceptionInInitializerError errInInitializerError) {
-      Exception exInInitializerError = (Exception) errInInitializerError.getException();
+    } catch (ExceptionInInitializerError errInInitializerError) {
       throw errInInitializerError;
     } catch (Throwable ex) {
       LOG.error("Erreur de chargement", ex);
@@ -174,7 +188,7 @@ public class TestControleByteCode extends ScanneClasspath {
       } else {
         testerTypeDeRetour(methodName, parameterTypes, typeDeRetour, method);
       }
-    } catch (java.lang.NoClassDefFoundError errNoClassDefFound) {
+    } catch (NoClassDefFoundError errNoClassDefFound) {
       addErreur("Classe non trouvee lors de la récuperation de la méthode " + classeEnCours + "#" + methodName + " : " + errNoClassDefFound);
     } catch (Throwable ex) {
       LOG.error("Erreur d'appel de methode", ex);
@@ -224,7 +238,7 @@ public class TestControleByteCode extends ScanneClasspath {
     Method method = null;
     try {
       method = aClass.getMethod(methodName, parameterTypes);
-    } catch (java.lang.NoSuchMethodException ex) {
+    } catch (NoSuchMethodException ex) {
       Class<?> supClass = aClass.getSuperclass();
       if (supClass != null) {
         method = getMethod(supClass, methodName, parameterTypes);
@@ -262,39 +276,7 @@ public class TestControleByteCode extends ScanneClasspath {
   @Override
   protected int logBilan() {
     super.logBilan();
-    int nbErreurTotal = 0;
-    int nbErreurParJar = 0;
-    int nbJarEnErreur = 0;
-    int nbClassesEnErreur = 0;
-    StringBuilder erreursParJar = new StringBuilder();
-
-    for (Jar jar : jarsTraites) {
-      nbErreurParJar = 0;
-      if (!jar.getClassesEnErreur().isEmpty()) {
-        LOG.info("|=== " + jar.getNom() + " ===|");
-        LOG.info("\t|=== Classes en erreur ===|");
-      }
-      for (Classe classeEnErreur : jar.getClassesEnErreur()) {
-        nbErreurTotal += classeEnErreur.getNbErreurs();
-        nbErreurParJar += classeEnErreur.getNbErreurs();
-        nbClassesEnErreur++;
-
-        LOG.info("\t\t" + classeEnErreur.getNom() + " : " + classeEnErreur.getNbErreurs() + " erreur(s)");
-      }
-      erreursParJar.append("\t" + jar.getNom() + " : " + nbErreurParJar).append(lineSeparator());
-      if (nbErreurParJar > 0) {
-        nbJarEnErreur++;
-      }
-    }
-
-    doLogList(classesReferenceesNonTrouveesOuChargees, "Classes referencees non trouvees :");
-    LOG.info("Classes non trouvees ou non chargees (erreur de chargement) : " + classesReferenceesNonTrouveesOuChargees.size());
-    LOG.info("Erreur par jar : " + lineSeparator() + erreursParJar.toString());
-    LOG.info("Jar en erreur : " + nbJarEnErreur);
-    LOG.info("Classe en erreur : " + nbClassesEnErreur);
-    LOG.info("Nombre d'erreur totale : " + nbErreurTotal);
-
-    return nbErreurTotal;
+    return new BilanControleByteCode(this).execute();
   }
 
   @Override
@@ -318,5 +300,13 @@ public class TestControleByteCode extends ScanneClasspath {
   @Override
   protected boolean isAvecFlux() {
     return true;
+  }
+
+  public Set<Jar> getJarsTraites() {
+    return jarsTraites;
+  }
+
+  public Set<String> getClassesReferenceesNonTrouveesOuChargees() {
+    return classesReferenceesNonTrouveesOuChargees;
   }
 }

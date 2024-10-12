@@ -63,7 +63,7 @@ public class TestControleByteCode extends ScanneClasspath {
    * Possibilité de configurer le nombre de jar minimum traité via la variable d'environnement -DnbJarMinimum=2
    */
   private void validerNombreJarMinimumTraite() {
-    assertThat(getJarsTraites().size() > nbJarMinimum).isTrue();
+    assertThat(getJarsTraites().size()).isGreaterThan(nbJarMinimum);
   }
 
   @Override

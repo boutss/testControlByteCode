@@ -7,26 +7,27 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
-import org.junit.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-public class ScanneClasspathTest {
+class ScanneClasspathTest {
 
   private ScanneClasspath tested;
 
-  @Before
-  public void init() {
+  @BeforeEach
+  void init() {
     tested = spy(ScanneClasspath.class);
   }
 
   @Test
-  public void should_return_empty_list_on_get_fichiers_class() throws IOException {
+  void should_return_empty_list_on_get_fichiers_class() throws IOException {
     String pathThatExist = "";
     String pathThatDoesNotExist = "Path/that/does/not/exist";
 
     List<Path> shoudlNotBeEmpty = tested.getFichiers(pathThatExist);
-    assertThat(shoudlNotBeEmpty.isEmpty()).isFalse();
+    assertThat(shoudlNotBeEmpty).isNotEmpty();
 
     List<Path> shoudlBeEmpty = tested.getFichiers(pathThatDoesNotExist);
-    assertThat(shoudlBeEmpty.isEmpty()).isTrue();
+    assertThat(shoudlBeEmpty).isEmpty();
   }
 }

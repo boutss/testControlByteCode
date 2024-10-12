@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.*;
 import java.util.NoSuchElementException;
 
+import org.junit.jupiter.api.BeforeEach;
+
 import com.efluid.tcbc.TestControleByteCode;
 import com.efluid.tcbc.object.*;
 import net.bytebuddy.ByteBuddy;
@@ -20,6 +22,7 @@ public class TestExampleControlByteCode extends TestControleByteCode {
   private static final String TARGET_TEST_CLASSES = "target/test-classes";
 
   @Override
+  @BeforeEach
   public void init() {
     super.init();
     changeTheReturnTypeFromStringToVoid();

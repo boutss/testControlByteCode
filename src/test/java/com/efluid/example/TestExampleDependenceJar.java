@@ -46,7 +46,7 @@ public class TestExampleDependenceJar extends TestDependenceJar {
 
   @Override
   protected void isValid(int erreurs) {
-    assertThat(erreurs).isEqualTo(0);
+    assertThat(erreurs).isZero();
     Jar jarTestClasses = getJarsTraites().stream().filter(jar -> jar.getNom().contains("test-classes")).findFirst().get();
     assertThat(jarTestClasses.getDependences()).hasKeySatisfying(new Condition<>(k -> k.contains("slf4j"), "No dependence with sfl4j"));
     assertThat(new File(NOM_FICHIER_GRAPHVIZ)).isFile().exists();

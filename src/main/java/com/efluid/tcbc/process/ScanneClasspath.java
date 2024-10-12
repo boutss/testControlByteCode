@@ -1,9 +1,9 @@
 package com.efluid.tcbc.process;
 
-import static java.io.File.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static java.io.File.separator;
 import static java.nio.file.FileVisitResult.CONTINUE;
 import static java.nio.file.Files.*;
-import static org.assertj.core.api.Assertions.assertThat;
 import static com.efluid.tcbc.process.ScanneClasspath.Exclusion.*;
 
 import java.io.File;
@@ -28,8 +28,8 @@ import java.util.jar.JarFile;
 import java.util.regex.Pattern;
 
 import org.assertj.core.util.VisibleForTesting;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -135,7 +135,7 @@ public abstract class ScanneClasspath {
     doLogList(exclusions.get(ERREUR), "Exclusions des erreurs");
   }
 
-  @Before
+  @BeforeEach
   public void init() {
     chargerConfiguration();
   }
